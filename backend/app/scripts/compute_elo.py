@@ -60,18 +60,21 @@ def compute_ratings(league: str = "nfl") -> dict[str, float]:
         db.close()
 
 
-def find_value_games(league: str = "nfl") -> list[dict]:
+def find_value_games(league: str = "nfl", week: int | None = None) -> list[dict]:
     """For upcoming (not-yet-completed) games with a moneyline available, compare
-    the Elo win probability to the market's vig-free implied probability."""
+    the Elo win probability to the market's vig-free implied probability.
+    Optionally scoped to a single week — otherwise this dumps the whole
+    season, which isn't a useful "value" view in practice."""
     to_elo_key = _to_elo_key(league)
     db = SessionLocal()
     value_games = []
     try:
-        upcoming = (
-            db.query(models.Game)
-            .filter(models.Game.league == league, models.Game.completed.is_(False))
-            .all()
+        query = db.query(models.Game).filter(
+            models.Game.league == league, models.Game.completed.is_(False)
         )
+        if week is not None:
+            query = query.filter(models.Game.week == week)
+        upcoming = query.all()
         ratings = {r.team: r.rating for r in db.query(models.TeamElo).filter_by(league=league).all()}
 
         for game in upcoming:
@@ -95,6 +98,7 @@ def find_value_games(league: str = "nfl") -> list[dict]:
             value_games.append(
                 {
                     "game_id": game.id,
+                    "week": game.week,
                     "matchup": f"{game.away_team} @ {game.home_team}",
                     "elo_home_win_prob": round(elo_prob, 4),
                     "market_home_win_prob": round(market_home, 4),

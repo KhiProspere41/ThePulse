@@ -15,7 +15,9 @@ def elo_ratings(league: str = Query("nfl", pattern="^(nfl|college)$"), db: Sessi
 
 
 @router.get("/elo/value")
-def elo_value(league: str = Query("nfl", pattern="^(nfl|college)$")):
-    """Upcoming games where the Elo model's win probability diverges from the
-    vig-free market probability — potential value bets."""
-    return find_value_games(league)
+def elo_value(week: int, league: str = Query("nfl", pattern="^(nfl|college)$")):
+    """Games in a given week where the Elo model's win probability diverges
+    from the vig-free market probability — potential value bets. Scoped to a
+    single week rather than the whole season, which isn't a useful "value"
+    view in practice."""
+    return find_value_games(league, week)

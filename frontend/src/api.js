@@ -20,6 +20,6 @@ export const getDashboard = () => api.get('/stats/dashboard').then((r) => r.data
 
 export const getEloRatings = (league = 'nfl') => api.get('/elo/ratings', { params: { league } }).then((r) => r.data)
 
-export const getEloValue = (league = 'nfl') => api.get('/elo/value', { params: { league } }).then((r) => r.data)
+export const getEloValue = (league, week) => api.get('/elo/value', { params: { league, week } }).then((r) => r.data)
 
 export default api

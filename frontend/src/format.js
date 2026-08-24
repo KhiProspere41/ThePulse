@@ -4,8 +4,17 @@ export const formatPoint = (point) => (point == null ? '' : point > 0 ? `+${poin
 
 export const formatPct = (value) => (value == null ? '—' : `${(value * 100).toFixed(1)}%`)
 
+// The backend stores every timestamp as a naive UTC datetime and serializes
+// it without a timezone marker (e.g. "2026-09-10T00:15:00", no "Z"). A
+// date-time string with no offset is parsed by `Date` as *local* time, not
+// UTC — that silently shifted every kickoff by the viewer's UTC offset, and
+// for late-evening ET games (which land after midnight UTC) showed the wrong
+// calendar day entirely. Appending "Z" tells `Date` what the string already
+// means: UTC.
+const asUtc = (iso) => (/[Zz]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`)
+
 export const formatDate = (iso) =>
-  new Date(iso).toLocaleString('en-US', {
+  new Date(asUtc(iso)).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',

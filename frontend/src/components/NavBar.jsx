@@ -1,11 +1,46 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { getApiUsage } from '../api'
 
 const links = [
   { to: '/', label: 'Games' },
+  { to: '/futures', label: 'Futures' },
   { to: '/picks', label: 'Pick Tracker' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/elo', label: 'Elo vs. Market' },
 ]
+
+/**
+ * The Odds API's free tier is 500 requests a month and player props are billed
+ * per market per event, so the remaining balance is worth keeping on screen —
+ * it's the difference between the app working all month and going dark on day
+ * two.
+ */
+function QuotaBadge() {
+  const [usage, setUsage] = useState(null)
+
+  useEffect(() => {
+    getApiUsage().then(setUsage).catch(() => setUsage(null))
+  }, [])
+
+  if (!usage || usage.requests_remaining == null) return null
+
+  const total = (usage.requests_remaining ?? 0) + (usage.requests_used ?? 0)
+  const low = total > 0 && usage.requests_remaining / total < 0.15
+
+  return (
+    <span
+      title={`${usage.requests_used ?? '?'} of ${total || '?'} Odds API requests used this period`}
+      className={`ml-auto text-xs font-mono tabular-nums px-2 py-1 rounded border ${
+        low
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+          : 'border-slate-800 text-slate-500'
+      }`}
+    >
+      {usage.requests_remaining} API credits left
+    </span>
+  )
+}
 
 export default function NavBar() {
   return (
@@ -30,6 +65,7 @@ export default function NavBar() {
             </NavLink>
           ))}
         </nav>
+        <QuotaBadge />
       </div>
     </header>
   )

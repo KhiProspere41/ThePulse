@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getLines } from '../api'
 import OddsComparisonTable from '../components/OddsComparisonTable'
 import PickForm from '../components/PickForm'
+import PlayerPropsPanel from '../components/PlayerPropsPanel'
 import { formatDate } from '../format'
 
 export default function GameDetail() {
@@ -45,7 +46,14 @@ export default function GameDetail() {
             bookmakers={bookmakers}
             onPick={(odd, row) => {
               setSavedMsg(false)
-              setPrefill({ odd, row })
+              setPrefill({
+                betType: 'game',
+                market: row.market,
+                selection:
+                  row.side === 'home' ? game.home_team : row.side === 'away' ? game.away_team : row.side,
+                point: odd.point,
+                price: odd.price,
+              })
             }}
           />
         </div>
@@ -61,6 +69,24 @@ export default function GameDetail() {
           {savedMsg && <p className="text-emerald-400 text-xs mt-2">Pick saved ✓</p>}
         </div>
       </div>
+
+      {game.league === 'nfl' && (
+        <PlayerPropsPanel
+          gameId={game.id}
+          onPick={(prop) => {
+            setSavedMsg(false)
+            setPrefill({
+              betType: 'player_prop',
+              market: prop.market,
+              selection: prop.side,
+              player: prop.player,
+              point: prop.point,
+              price: prop.price,
+            })
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+        />
+      )}
     </div>
   )
 }

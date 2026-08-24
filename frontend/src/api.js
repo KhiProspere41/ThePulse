@@ -22,4 +22,20 @@ export const getEloRatings = (league = 'nfl') => api.get('/elo/ratings', { param
 
 export const getEloValue = (league, week) => api.get('/elo/value', { params: { league, week } }).then((r) => r.data)
 
+export const getPropMarkets = () => api.get('/props/markets').then((r) => r.data)
+
+// `refresh` spends Odds API credits — only pass it from an explicit user action.
+export const getProps = (gameId, refresh = false) =>
+  api.get(`/props/${gameId}`, { params: { refresh } }).then((r) => r.data)
+
+export const getSuperBowlFutures = (refresh = false) =>
+  api.get('/futures/super-bowl', { params: { refresh } }).then((r) => r.data)
+
+export const getFuturesBoard = (iterations) =>
+  api.get('/futures/board', { params: { ...(iterations ? { iterations } : {}) } }).then((r) => r.data)
+
+export const getDivisionRaces = () => api.get('/futures/divisions').then((r) => r.data)
+
+export const getApiUsage = () => api.get('/stats/api-usage').then((r) => r.data)
+
 export default api

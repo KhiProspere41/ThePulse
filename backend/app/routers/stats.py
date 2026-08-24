@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, schemas
 from app.database import get_db
 from app.ingest import update_closing_lines_and_clv
 
@@ -46,3 +46,14 @@ def dashboard(db: Session = Depends(get_db)):
             if p.clv is not None
         ],
     }
+
+
+@router.get("/stats/api-usage", response_model=schemas.ApiUsageOut)
+def api_usage(db: Session = Depends(get_db)):
+    """How much of the Odds API's monthly allowance is left.
+
+    Surfaced in the UI because the free tier is 500 requests/month and player
+    props are billed per market per event — it's the number that decides
+    whether the app still works at the end of the month."""
+    row = db.get(models.ApiUsage, 1)
+    return row or models.ApiUsage(id=1)

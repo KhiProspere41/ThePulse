@@ -24,6 +24,9 @@ class Game(Base):
     odds_snapshots: Mapped[list["OddsSnapshot"]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
     )
+    player_props: Mapped[list["PlayerPropSnapshot"]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
     picks: Mapped[list["Pick"]] = relationship(back_populates="game")
 
 
@@ -47,9 +50,13 @@ class Pick(Base):
     __tablename__ = "picks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    game_id: Mapped[str] = mapped_column(ForeignKey("games.id"), index=True)
-    market: Mapped[str] = mapped_column(String)  # h2h | spreads | totals
-    selection: Mapped[str] = mapped_column(String)  # team name, "over", or "under"
+    # Nullable because futures picks ("win the Super Bowl") belong to a season,
+    # not to any single game.
+    game_id: Mapped[str | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
+    bet_type: Mapped[str] = mapped_column(String, default="game", index=True)  # game | player_prop | futures
+    market: Mapped[str] = mapped_column(String)  # h2h | spreads | totals | player_* | outrights
+    selection: Mapped[str] = mapped_column(String)  # team name, "over"/"under", or "yes"/"no"
+    player: Mapped[str | None] = mapped_column(String, nullable=True)  # player props only
     point: Mapped[float | None] = mapped_column(Float, nullable=True)
     stake: Mapped[float] = mapped_column(Float, default=1.0)
 
@@ -63,7 +70,7 @@ class Pick(Base):
     result: Mapped[str] = mapped_column(String, default="pending")  # pending|win|loss|push
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    game: Mapped["Game"] = relationship(back_populates="picks")
+    game: Mapped["Game | None"] = relationship(back_populates="picks")
 
 
 class TeamElo(Base):
@@ -73,3 +80,102 @@ class TeamElo(Base):
     league: Mapped[str] = mapped_column(String, primary_key=True)
     rating: Mapped[float] = mapped_column(Float, default=1500.0)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class PlayerPropSnapshot(Base):
+    """One player-prop outcome from one bookmaker at one point in time.
+
+    Player props come from The Odds API's per-event endpoint, which is billed
+    per market per region *per event* — so unlike game lines these are fetched
+    on demand and cached (see `ingest.ingest_player_props`), never polled.
+    """
+
+    __tablename__ = "player_prop_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.id"), index=True)
+    bookmaker: Mapped[str] = mapped_column(String, index=True)
+    market: Mapped[str] = mapped_column(String, index=True)  # player_pass_yds, player_anytime_td, ...
+    player: Mapped[str] = mapped_column(String, index=True)
+    side: Mapped[str] = mapped_column(String)  # over | under | yes | no
+    price: Mapped[int] = mapped_column(Integer)  # American odds
+    point: Mapped[float | None] = mapped_column(Float, nullable=True)  # the line, absent for anytime-TD
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, index=True)
+    is_closing: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    game: Mapped["Game"] = relationship(back_populates="player_props")
+
+
+class PropsFetch(Base):
+    """Cache marker for player-prop fetches, one row per game.
+
+    Tracked separately from the snapshots themselves so that a game whose books
+    simply have no props posted yet is still recorded as "checked recently" and
+    doesn't get re-requested (and re-billed) on every page view.
+    """
+
+    __tablename__ = "props_fetches"
+
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.id"), primary_key=True)
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    outcome_count: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class FuturesSnapshot(Base):
+    """An outright (futures) price for a team, e.g. to win the Super Bowl."""
+
+    __tablename__ = "futures_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    league: Mapped[str] = mapped_column(String, index=True, default="nfl")
+    sport_key: Mapped[str] = mapped_column(String, index=True)  # americanfootball_nfl_super_bowl_winner
+    market: Mapped[str] = mapped_column(String, default="outrights")
+    team: Mapped[str] = mapped_column(String, index=True)  # full team name as the book publishes it
+    bookmaker: Mapped[str] = mapped_column(String, index=True)
+    price: Mapped[int] = mapped_column(Integer)  # American odds
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, index=True)
+
+
+class ApiUsage(Base):
+    """Latest quota headers returned by The Odds API.
+
+    The free tier is 500 requests/month and the per-event props endpoint bills
+    one credit per market returned, so knowing the remaining balance is the
+    difference between a demo that works all month and one that dies on day two.
+    """
+
+    __tablename__ = "api_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    requests_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requests_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_endpoint: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class ScheduledGame(Base):
+    """The full published season schedule, keyed by nflverse game id.
+
+    Kept separate from `games` on purpose. `games` is the odds board — one row
+    per event the sportsbooks have posted, which in-season is only the next
+    week or two. The season simulator needs all 272 games, including ones no
+    book has priced yet, and mixing those into `games` would put phantom
+    rows with no odds on the games page and duplicate every live event under a
+    second id. Loaded by `app.scripts.load_schedule`.
+
+    Team columns hold nflverse abbreviations, matching `team_elo`.
+    """
+
+    __tablename__ = "scheduled_games"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    season: Mapped[int] = mapped_column(Integer, index=True)
+    week: Mapped[int] = mapped_column(Integer, index=True)
+    kickoff: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    home_team: Mapped[str] = mapped_column(String, index=True)
+    away_team: Mapped[str] = mapped_column(String, index=True)
+    home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)

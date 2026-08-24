@@ -38,7 +38,7 @@ export default function OddsComparisonTable({ game, bookmakers, onPick }) {
               {bookNames.map((book) => {
                 const odd = cell(book, row.market, row.side)
                 return (
-                  <td key={book} className="px-4 py-3 text-right tabular-nums">
+                  <td key={book} className="px-4 py-3 text-right font-mono tabular-nums">
                     {odd ? (
                       <button
                         onClick={() => onPick(odd, row)}

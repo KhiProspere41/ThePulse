@@ -23,7 +23,7 @@ export default function EloValue() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">Elo vs. Market — Week {week}</h1>
+        <h1 className="text-2xl font-bold">Elo vs. Market (Week {week})</h1>
         <LeagueWeekSelector
           league={league}
           week={week}
@@ -53,10 +53,10 @@ export default function EloValue() {
               {eloValue.map((g) => (
                 <tr key={g.game_id} className="hover:bg-slate-900/60">
                   <td className="px-4 py-3">{g.matchup}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatPct(g.elo_home_win_prob)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatPct(g.market_home_win_prob)}</td>
+                  <td className="px-4 py-3 text-right font-mono tabular-nums">{formatPct(g.elo_home_win_prob)}</td>
+                  <td className="px-4 py-3 text-right font-mono tabular-nums">{formatPct(g.market_home_win_prob)}</td>
                   <td
-                    className={`px-4 py-3 text-right tabular-nums font-semibold ${
+                    className={`px-4 py-3 text-right font-mono tabular-nums font-semibold ${
                       g.edge >= 0 ? 'text-emerald-400' : 'text-red-400'
                     }`}
                   >

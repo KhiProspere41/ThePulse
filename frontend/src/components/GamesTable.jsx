@@ -43,18 +43,18 @@ export default function GamesTable({ games }) {
                   </div>
                   {game.completed && (
                     <div className="text-xs text-slate-500">
-                      Final: {game.away_score}–{game.home_score}
+                      Final: {game.away_score}-{game.home_score}
                     </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-slate-400">{formatDate(game.commence_time)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-4 py-3 text-right font-mono tabular-nums">
                   {homeSpread ? `${formatPoint(homeSpread.point)} (${formatPrice(homeSpread.price)})` : '—'}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-4 py-3 text-right font-mono tabular-nums">
                   {homeMl && awayMl ? `${formatPrice(homeMl.price)} / ${formatPrice(awayMl.price)}` : '—'}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-4 py-3 text-right font-mono tabular-nums">
                   {over ? `O ${over.point} (${formatPrice(over.price)})` : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">

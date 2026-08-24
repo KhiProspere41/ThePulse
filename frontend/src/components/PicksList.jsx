@@ -1,4 +1,4 @@
-import { formatPoint, formatPrice } from '../format'
+import { formatPoint, formatPrice, marketLabel } from '../format'
 import { setPickResult } from '../api'
 
 const RESULT_STYLES = {
@@ -10,7 +10,7 @@ const RESULT_STYLES = {
 
 export default function PicksList({ picks, onChanged }) {
   if (!picks.length) {
-    return <div className="text-center py-16 text-slate-500">No picks logged yet — go pick a game.</div>
+    return <div className="text-center py-16 text-slate-500">No picks logged yet. Go pick a game.</div>
   }
 
   async function handleResult(id, result) {
@@ -35,20 +35,31 @@ export default function PicksList({ picks, onChanged }) {
           {picks.map((pick) => (
             <tr key={pick.id} className="hover:bg-slate-900/60">
               <td className="px-4 py-3 text-slate-300">
-                {pick.game ? `${pick.game.away_team} @ ${pick.game.home_team}` : pick.game_id}
+                {pick.game
+                  ? `${pick.game.away_team} @ ${pick.game.home_team}`
+                  : pick.bet_type === 'futures'
+                    ? 'Season futures'
+                    : pick.game_id}
               </td>
-              <td className="px-4 py-3 font-medium text-slate-100 capitalize">
-                {pick.selection} {formatPoint(pick.point)}
-                <span className="text-slate-500 uppercase text-[10px] ml-1">{pick.market}</span>
+              <td className="px-4 py-3 font-medium text-slate-100">
+                {pick.player && <span className="text-slate-300">{pick.player}: </span>}
+                <span className="capitalize">{pick.selection}</span> {formatPoint(pick.point)}
+                <span className="text-slate-500 text-[10px] ml-1.5 uppercase tracking-wide">
+                  {marketLabel(pick.market)}
+                </span>
               </td>
-              <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pick.entry_price)}</td>
-              <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pick.closing_price)}</td>
+              <td className="px-4 py-3 text-right font-mono tabular-nums">{formatPrice(pick.entry_price)}</td>
+              <td className="px-4 py-3 text-right font-mono tabular-nums">{formatPrice(pick.closing_price)}</td>
               <td
-                className={`px-4 py-3 text-right tabular-nums font-semibold ${
+                className={`px-4 py-3 text-right font-mono tabular-nums font-semibold ${
                   pick.clv == null ? 'text-slate-500' : pick.clv >= 0 ? 'text-emerald-400' : 'text-red-400'
                 }`}
               >
-                {pick.clv == null ? '—' : `${pick.clv > 0 ? '+' : ''}${pick.clv}%`}
+                {pick.bet_type === 'futures'
+                  ? 'n/a'
+                  : pick.clv == null
+                    ? '—'
+                    : `${pick.clv > 0 ? '+' : ''}${pick.clv}%`}
               </td>
               <td className="px-4 py-3 text-center">
                 <select

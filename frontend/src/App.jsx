@@ -5,6 +5,7 @@ import GameDetail from './pages/GameDetail'
 import Picks from './pages/Picks'
 import Dashboard from './pages/Dashboard'
 import EloValue from './pages/EloValue'
+import Futures from './pages/Futures'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/game/:id" element={<GameDetail />} />
         <Route path="/picks" element={<Picks />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/futures" element={<Futures />} />
         <Route path="/elo" element={<EloValue />} />
       </Routes>
     </div>

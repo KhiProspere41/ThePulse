@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.probability import american_to_implied_prob
+from app.simulate import current_season
 
 router = APIRouter(tags=["odds"])
 
@@ -12,11 +13,28 @@ router = APIRouter(tags=["odds"])
 def get_odds(
     week: int | None = Query(None, description="NFL/CFB week number"),
     league: str = Query("nfl", pattern="^(nfl|college)$"),
+    season: int | None = Query(
+        None, description="Season year; defaults to the season in progress"
+    ),
+    all_seasons: bool = Query(
+        False, description="Include past seasons loaded for Elo/backtesting"
+    ),
     db: Session = Depends(get_db),
 ):
+    """Games for a week, with the latest line from every book.
+
+    Scoped to one season by default. The Elo pipeline loads several years of
+    completed games into the same table, and week numbers repeat across
+    seasons — without this, "week 1" returns three seasons of games stacked on
+    top of each other, and clicking through to one of them would try to fetch
+    player props for a game played two years ago.
+    """
     query = db.query(models.Game).filter(models.Game.league == league)
     if week is not None:
         query = query.filter(models.Game.week == week)
+    if not all_seasons:
+        target = season if season is not None else current_season()
+        query = query.filter(models.Game.season == target)
     games = query.order_by(models.Game.commence_time).all()
 
     results = []

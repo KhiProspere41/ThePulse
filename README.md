@@ -3,8 +3,10 @@
 Football betting odds aggregator and pick tracker (MVP). Pulls live odds from
 [The Odds API](https://the-odds-api.com), lets you compare lines across
 sportsbooks, log picks, and track closing line value (CLV), win rate, and ROI.
-Includes a simple Elo model for NFL and college (FBS) teams to flag potential
-value against the market.
+Covers game lines, **NFL player props**, and **team futures** — Super Bowl,
+division titles, and season win totals. Includes a simple Elo model for NFL and
+college (FBS) teams to flag potential value against the market, and a Monte
+Carlo season simulator that prices the futures markets no odds feed publishes.
 
 **Stack:** FastAPI + SQLAlchemy (SQLite for local dev, Postgres for prod) · React + Vite + TailwindCSS · APScheduler.
 
@@ -22,13 +24,18 @@ ThePulse/
 │   │   ├── odds_api.py        # The Odds API client
 │   │   ├── ingest.py          # raw odds -> DB rows, closing-line + CLV backfill
 │   │   ├── elo.py             # Elo rating math (shared by both leagues)
+│   │   ├── simulate.py        # Monte Carlo season sim -> division / win-total / SB probabilities
+│   │   ├── divisions.py       # NFL conference + division structure
 │   │   ├── teams.py           # Odds API NFL team name -> nflverse abbreviation
 │   │   ├── teams_cfb.py       # Odds API CFB team name -> CFBD school name (generated)
 │   │   ├── probability.py     # American odds / spread <-> implied probability
 │   │   ├── scheduler.py       # APScheduler: refresh odds every N hours
-│   │   ├── routers/           # odds, lines, picks, stats, elo endpoints
+│   │   ├── routers/           # odds, lines, props, futures, picks, stats, elo endpoints
 │   │   └── scripts/
 │   │       ├── init_db.py                  # create tables ("migration" for MVP)
+│   │       ├── migrate.py                  # bring an existing DB up to the current models
+│   │       ├── seed_demo.py                # runnable demo dataset, no API key needed
+│   │       ├── load_schedule.py            # full season schedule -> scheduled_games (for the sim)
 │   │       ├── load_historical_data.py     # nfl-data-py -> games + closing lines
 │   │       ├── load_historical_cfb_data.py # CFBD API -> college games + closing lines
 │   │       ├── generate_cfb_teams.py       # (re)generates teams_cfb.py from CFBD's /teams
@@ -37,8 +44,10 @@ ThePulse/
 │   └── .env.example
 └── frontend/
     ├── src/
-    │   ├── pages/          # Home, GameDetail, Picks, Dashboard, EloValue
-    │   ├── components/     # GamesTable, OddsComparisonTable, PickForm, PicksList, ClvTrendChart, LeagueWeekSelector
+    │   ├── pages/          # Home, GameDetail, Futures, Picks, Dashboard, EloValue
+    │   ├── components/     # GamesTable, OddsComparisonTable, PlayerPropsTable/Panel,
+    │   │                   # SuperBowlBoard, DivisionRaces, WinTotalsTable,
+    │   │                   # PickForm, PicksList, ClvTrendChart, LeagueWeekSelector
     │   └── api.js           # axios client for the backend
     └── .env.example
 ```
@@ -66,6 +75,16 @@ Create the database tables (the "migration" step for this MVP — no Alembic nee
 ```bash
 python -m app.scripts.init_db
 ```
+
+If you already have a database from an earlier build, run the migration
+instead — `init_db` creates missing tables but never alters existing ones, and
+player props / futures changed the `picks` table:
+
+```bash
+python -m app.scripts.migrate
+```
+
+It's idempotent and safe to re-run.
 
 Run the API:
 
@@ -128,7 +147,103 @@ the generator if team names drift (conference realignment, rebrands):
 python -m app.scripts.generate_cfb_teams
 ```
 
-### 3. Postgres for production
+### 3. Player props and team futures
+
+Both live behind the same Odds API key, but they're billed very differently
+from game lines, and the design follows from that.
+
+**Player props** (`/props/{game_id}`, shown on each NFL game page) come from
+the API's *per-event* endpoint, which charges one credit per market returned
+**per event**. Six markets across a 16-game slate is ~96 credits — a fifth of
+the free tier's 500/month, for one refresh of one week. So props are never
+polled by the scheduler. They're fetched when you open a game, cached in
+`player_prop_snapshots` for `PLAYER_PROPS_CACHE_HOURS` (default 12), and only
+refetched when you press **Refresh** on the page. A `PropsFetch` marker is
+written even when a game has no props posted, so an empty slate isn't
+re-requested (and re-billed) on every page view.
+
+Markets pulled by default (`PLAYER_PROP_MARKETS`):
+passing yards, passing TDs, rushing yards, receiving yards, receptions,
+anytime TD. These six have the widest book coverage; add more at the cost of
+a credit per market per game.
+
+**Team futures** (`/futures/*`, the Futures page) split into two halves,
+because the data does:
+
+| Market | Source |
+| --- | --- |
+| Win the Super Bowl | Real prices — `americanfootball_nfl_super_bowl_winner`, refreshed daily |
+| Win the division | **Model only** — no feed exists |
+| Season win totals (4+, 5+, 6+ … wins) | **Model only** — no feed exists |
+
+The Odds API publishes exactly one NFL futures sport key, the Super Bowl
+winner outrights market. There is no division-winner feed and no season
+win-total feed, so those two can't be aggregated from anywhere. `app/simulate.py`
+models them instead: it replays the rest of the season a few thousand times,
+deciding each game by the Elo win probability, then ranks the standings, awards
+division titles, seeds the playoffs and plays the bracket. That yields
+division-title probability, a cumulative win-total ladder (P(at least *k* wins)
+for every *k* from 1 to 17), playoff odds, and a model Super Bowl probability.
+
+That last one is the useful part: the Super Bowl *is* a real market, so
+`/futures/board` puts the model number next to it. Each book's board is
+devigged before comparison — a raw Super Bowl board holds well over 30%, so
+comparing against raw implied prices would flag "value" on all 32 teams — and
+the best available price across books drives an expected-value-per-unit column.
+
+The simulator needs the full schedule to be meaningful. The odds feed only
+covers games the books have posted, so load the real one:
+
+```bash
+python -m app.scripts.load_schedule            # season in progress
+python -m app.scripts.load_schedule --season 2026
+```
+
+No extra packages needed — unlike the other loaders this one reads nflverse's
+`games.csv` directly over `httpx` and parses it with the stdlib, rather than
+going through `nfl-data-py`. That's deliberate: `nfl_data_py.import_schedules()`
+reads from a single hard-coded mirror (`http://www.habitatring.com/games.csv`)
+over plain HTTP with no fallback, and that host isn't reachable from every
+network — it 403s outright from some. Pass `--url` to point at a different copy.
+
+Without the schedule the sim pads each team's remaining games with
+league-average opponents and says so on the page — usable, but the win ladder
+is only as good as the schedule behind it.
+
+**Simplifications in the model**, all stated on the page too: ties aren't
+simulated (<1% of games), standings ties are broken at random rather than by
+the real NFL tiebreakers, ratings are frozen rather than updated game to game,
+and injuries aren't modelled.
+
+### 4. Demo mode — run it without an API key
+
+The free tier is 500 requests a month and props are billed per market per
+event, so burning credits just to look at the UI is a bad trade:
+
+```bash
+python -m app.scripts.seed_demo      # Elo, a week of games + lines, props, a SB board
+python -m app.scripts.seed_demo --clear
+```
+
+Everything it writes is deterministic and clearly marked — game ids start with
+`demo_`, `Game.source` is `demo`, and every bookmaker is named `demo_*`, so
+synthetic prices can't be mistaken for real ones. It won't overwrite Elo
+ratings you computed from real history, and if the odds feed has already loaded
+real upcoming games it hangs the demo props off those instead of inventing a
+parallel slate.
+
+**Staying inside the free tier.** The nav bar shows the remaining monthly
+balance, read from the API's own `x-requests-remaining` header and stored in
+`api_usage`. Once it drops below `ODDS_API_MIN_REMAINING` (default 25),
+discretionary fetches — props and futures — stop spending and serve cached
+prices instead, so the app degrades rather than going dark. Game lines are
+exempt: they're the core feature.
+
+Rough monthly budget on the defaults: game lines 3 markets × 2 leagues every
+2 hours ≈ 2,160/month (over the free tier — raise `ODDS_REFRESH_INTERVAL_HOURS`
+to 12 for ~360), futures 1/day ≈ 30, props only what you actually open.
+
+### 5. Postgres for production
 
 Either use a local Postgres install (`createdb thepulse`), or spin one up with Docker:
 
@@ -146,7 +261,7 @@ DATABASE_URL=postgresql://thepulse:thepulse@localhost:5432/thepulse
 
 Then re-run `python -m app.scripts.init_db` against the new database.
 
-### 4. Frontend
+### 6. Frontend
 
 ```bash
 cd frontend

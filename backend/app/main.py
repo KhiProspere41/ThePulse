@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.ingest import refresh_all_leagues
-from app.routers import elo, lines, odds, picks, stats
+from app.routers import elo, futures, lines, odds, picks, props, stats
 from app.scheduler import start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +45,8 @@ app.include_router(lines.router)
 app.include_router(picks.router)
 app.include_router(stats.router)
 app.include_router(elo.router)
+app.include_router(props.router)
+app.include_router(futures.router)
 
 
 @app.get("/health")

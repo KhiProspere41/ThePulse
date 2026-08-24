@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { formatPoint, formatPrice, marketLabel } from '../format'
-import { setPickResult } from '../api'
+import { deletePick, deleteSlip, setPickResult } from '../api'
 
 const RESULT_STYLES = {
   win: 'text-emerald-400',
@@ -42,9 +42,31 @@ function ResultSelect({ pick, onChanged }) {
   )
 }
 
+function RemoveButton({ onClick, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="text-slate-600 hover:text-red-400 transition-colors px-1"
+    >
+      ✕
+    </button>
+  )
+}
+
 export default function PicksList({ slips, onChanged }) {
   if (!slips.length) {
     return <div className="text-center py-16 text-slate-500">No picks logged yet. Go pick a game.</div>
+  }
+
+  async function handleDeleteSlip(slipId) {
+    await deleteSlip(slipId)
+    onChanged?.()
+  }
+
+  async function handleDeletePick(pickId) {
+    await deletePick(pickId)
+    onChanged?.()
   }
 
   return (
@@ -58,6 +80,7 @@ export default function PicksList({ slips, onChanged }) {
             <th className="text-right px-4 py-3">Closing</th>
             <th className="text-right px-4 py-3">CLV</th>
             <th className="text-center px-4 py-3">Result</th>
+            <th className="w-8"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
@@ -81,6 +104,9 @@ export default function PicksList({ slips, onChanged }) {
                       {slip.result}
                     </span>
                   </td>
+                  <td className="px-2 py-3 text-center">
+                    <RemoveButton onClick={() => handleDeleteSlip(slip.id)} title="Remove parlay" />
+                  </td>
                 </tr>
                 {slip.legs.map((leg) => (
                   <tr key={leg.id} className="hover:bg-slate-900/60">
@@ -98,6 +124,7 @@ export default function PicksList({ slips, onChanged }) {
                     <td className="px-4 py-2 text-center">
                       <ResultSelect pick={leg} onChanged={onChanged} />
                     </td>
+                    <td></td>
                   </tr>
                 ))}
               </Fragment>
@@ -117,6 +144,9 @@ export default function PicksList({ slips, onChanged }) {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <ResultSelect pick={pick} onChanged={onChanged} />
+                  </td>
+                  <td className="px-2 py-3 text-center">
+                    <RemoveButton onClick={() => handleDeletePick(pick.id)} title="Remove pick" />
                   </td>
                 </tr>
               ))

@@ -61,3 +61,25 @@ def set_pick_result(pick_id: int, result: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(pick)
     return pick
+
+
+@router.delete("/picks/{pick_id}", status_code=204)
+def delete_pick(pick_id: int, db: Session = Depends(get_db)):
+    """Remove a standalone pick or one leg of a straight slip.
+
+    A parlay leg can't be removed on its own — it would leave the slip's
+    stored combined_price describing legs that no longer all exist. Delete
+    the whole parlay via DELETE /slips/{id} instead.
+    """
+    pick = db.get(models.Pick, pick_id)
+    if pick is None:
+        raise HTTPException(status_code=404, detail="Pick not found")
+    if pick.slip is not None and pick.slip.mode == "parlay":
+        raise HTTPException(status_code=400, detail="Can't remove one leg of a parlay — delete the whole slip")
+
+    slip = pick.slip
+    was_only_leg = slip is not None and len(slip.legs) == 1
+    db.delete(pick)
+    if was_only_leg:
+        db.delete(slip)
+    db.commit()

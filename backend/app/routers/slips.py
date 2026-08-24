@@ -107,3 +107,14 @@ def list_slips(db: Session = Depends(get_db)):
     update_closing_lines_and_clv(db)
     slips = db.query(models.Slip).order_by(models.Slip.created_at.desc()).all()
     return [_slip_out(s) for s in slips]
+
+
+@router.delete("/slips/{slip_id}", status_code=204)
+def delete_slip(slip_id: int, db: Session = Depends(get_db)):
+    """Remove a slip and all of its legs — the only way to remove a parlay,
+    since its legs can't be deleted individually (see DELETE /picks/{id})."""
+    slip = db.get(models.Slip, slip_id)
+    if slip is None:
+        raise HTTPException(status_code=404, detail="Slip not found")
+    db.delete(slip)
+    db.commit()

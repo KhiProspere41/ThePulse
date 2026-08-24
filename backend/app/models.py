@@ -69,7 +69,9 @@ class Slip(Base):
     stake: Mapped[float | None] = mapped_column(Float, nullable=True)
     combined_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    legs: Mapped[list["Pick"]] = relationship(back_populates="slip", order_by="Pick.id")
+    legs: Mapped[list["Pick"]] = relationship(
+        back_populates="slip", order_by="Pick.id", cascade="all, delete-orphan"
+    )
 
 
 class Pick(Base):

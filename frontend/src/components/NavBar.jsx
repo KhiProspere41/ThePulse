@@ -4,6 +4,7 @@ const links = [
   { to: '/', label: 'Games' },
   { to: '/picks', label: 'Pick Tracker' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/elo', label: 'Elo vs. Market' },
 ]
 
 export default function NavBar() {

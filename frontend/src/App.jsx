@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import GameDetail from './pages/GameDetail'
 import Picks from './pages/Picks'
 import Dashboard from './pages/Dashboard'
+import EloValue from './pages/EloValue'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/game/:id" element={<GameDetail />} />
         <Route path="/picks" element={<Picks />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/elo" element={<EloValue />} />
       </Routes>
     </div>
   )

@@ -13,3 +13,10 @@ pandas==3.0.5
 numpy==2.5.2
 appdirs==1.4.4
 pyarrow==25.0.1
+
+# College football (load_historical_cfb_data.py) talks to the CFBD REST API
+# directly via httpx (already in requirements.txt) rather than the official
+# `cfbd` SDK — that package still pins pydantic<2, which conflicts with
+# FastAPI/pydantic-settings in this project and can't be worked around with
+# --no-deps (its generated models use pydantic v1 syntax, not just a stale
+# version pin, so it genuinely won't run under pydantic v2).

@@ -26,9 +26,10 @@ ThePulse/
 │   │   ├── scheduler.py       # APScheduler: refresh odds every N hours
 │   │   ├── routers/           # odds, lines, picks, stats, elo endpoints
 │   │   └── scripts/
-│   │       ├── init_db.py             # create tables ("migration" for MVP)
-│   │       ├── load_historical_data.py  # nfl-data-py -> games + closing lines
-│   │       └── compute_elo.py           # replay history -> Elo ratings + value
+│   │       ├── init_db.py                  # create tables ("migration" for MVP)
+│   │       ├── load_historical_data.py     # nfl-data-py -> games + closing lines
+│   │       ├── load_historical_cfb_data.py # CFBD API -> college games + closing lines
+│   │       └── compute_elo.py              # replay history -> Elo ratings + value (NFL only)
 │   ├── requirements.txt
 │   └── .env.example
 └── frontend/
@@ -53,8 +54,9 @@ cp .env.example .env
 
 Edit `backend/.env`:
 - `ODDS_API_KEY` — get a free key at [the-odds-api.com](https://the-odds-api.com) (500 requests/month free tier).
+- `CFBD_API_KEY` — get a free key at [collegefootballdata.com/key](https://collegefootballdata.com/key). Only needed for the college historical data pipeline below, not for the live API server.
 - `DATABASE_URL` — defaults to local SQLite (`sqlite:///./thepulse.db`), zero setup. Point it at Postgres for prod (see below).
-- `NFL_SEASON_START` — kickoff of the season's first game; used to derive a week number from each game's date.
+- `NFL_SEASON_START` / `CFB_SEASON_START` — kickoff of each league's first game; used to derive a week number from each game's date (they're set separately because the college season starts earlier and has a "week 0").
 
 Create the database tables (the "migration" step for this MVP — no Alembic needed, SQLAlchemy creates the schema directly):
 
@@ -93,6 +95,16 @@ This pulls the last 2 NFL seasons (schedules, final scores, closing Vegas
 lines) via [`nfl-data-py`](https://github.com/nflverse/nfl_data_py) — sourced
 from nflverse's public data, which mirrors Pro-Football-Reference — and
 computes Elo ratings + Elo-vs-market value for upcoming games.
+
+For college football, load the last 2 FBS seasons (schedules, final scores,
+closing betting lines) from [CollegeFootballData.com](https://collegefootballdata.com/)
+— no extra packages needed, it's called directly over `httpx`:
+
+```bash
+python -m app.scripts.load_historical_cfb_data --seasons 2024 2025
+```
+
+There's no college Elo — the Elo model is NFL-only.
 
 ### 3. Postgres for production
 
@@ -148,4 +160,8 @@ Open `http://localhost:5173`.
   with a fixed home-field-advantage constant. Both are simple baselines, not
   production-grade models.
 - The Odds API's free tier only returns *upcoming* games — historical odds
-  come from the `load_historical_data.py` / nfl-data-py pipeline instead.
+  come from the `load_historical_data.py` / nfl-data-py (NFL) and
+  `load_historical_cfb_data.py` / CFBD API (college) pipelines instead.
+- College betting lines from CFBD don't include vig-adjusted spread/total
+  prices (only the number, not the odds), so those default to -110; the
+  moneylines themselves are real.

@@ -17,8 +17,14 @@ SPORT_KEYS = {
 MARKETS = "h2h,spreads,totals"
 
 
-def week_for_commence_time(commence_time: dt.datetime) -> int:
-    """Best-effort NFL/CFB week number derived from kickoff date and NFL_SEASON_START."""
+def week_for_commence_time(commence_time: dt.datetime, league: str = "nfl") -> int:
+    """Best-effort week number derived from kickoff date and each league's own
+    season-start anchor. College has a "week 0" slate the weekend before its
+    week 1 anchor, so college weeks are allowed to floor at 0; the NFL has no
+    such week, so it floors at 1."""
+    if league == "college":
+        delta_days = (commence_time - settings.cfb_season_start).days
+        return max(0, delta_days // 7 + 1)
     delta_days = (commence_time - settings.nfl_season_start).days
     return max(1, delta_days // 7 + 1)
 

@@ -38,7 +38,7 @@ def ingest_league(db: Session, league: str) -> int:
             game = models.Game(
                 id=event["id"],
                 league=league,
-                week=week_for_commence_time(commence_time),
+                week=week_for_commence_time(commence_time, league),
                 commence_time=commence_time,
                 home_team=event["home_team"],
                 away_team=event["away_team"],
@@ -46,6 +46,7 @@ def ingest_league(db: Session, league: str) -> int:
             db.add(game)
         else:
             game.commence_time = commence_time
+            game.week = week_for_commence_time(commence_time, league)
 
         for bookmaker in event.get("bookmakers", []):
             for market in bookmaker.get("markets", []):

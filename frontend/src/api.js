@@ -38,4 +38,12 @@ export const getDivisionRaces = () => api.get('/futures/divisions').then((r) => 
 
 export const getApiUsage = () => api.get('/stats/api-usage').then((r) => r.data)
 
+export const getPlayerStatsSeasons = () => api.get('/player-stats/seasons').then((r) => r.data)
+
+export const getPlayerStatsLeaders = (category = 'overall', season) =>
+  api.get('/player-stats/leaders', { params: { category, ...(season ? { season } : {}) } }).then((r) => r.data)
+
+export const getPlayerStatsAwards = (season) =>
+  api.get('/player-stats/awards', { params: { ...(season ? { season } : {}) } }).then((r) => r.data)
+
 export default api

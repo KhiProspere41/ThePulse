@@ -5,6 +5,7 @@ import { getApiUsage } from '../api'
 const links = [
   { to: '/', label: 'Games' },
   { to: '/futures', label: 'Futures' },
+  { to: '/player-stats', label: 'Player Stats' },
   { to: '/picks', label: 'Pick Tracker' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/elo', label: 'Elo vs. Market' },

@@ -179,3 +179,46 @@ class ScheduledGame(Base):
     home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PlayerSeasonStats(Base):
+    """One player's cumulative regular-season stats for one NFL season.
+
+    Sourced from nflverse's published `player_stats_{season}.parquet` (offense:
+    passing/rushing/receiving) and its Pro-Football-Reference defensive mirror
+    (sacks/tackles/INTs), joined on the seasonal roster for name/position/team.
+    Loaded by `app.scripts.load_player_stats`. Both halves can be null for a
+    given row — a pure defender has no passing_yards, a pure offensive player
+    has no sacks.
+    """
+
+    __tablename__ = "player_season_stats"
+
+    player_id: Mapped[str] = mapped_column(String, primary_key=True)
+    season: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, index=True)
+    position: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    team: Mapped[str | None] = mapped_column(String, nullable=True)
+    games: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Offense
+    completions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    passing_yards: Mapped[float | None] = mapped_column(Float, nullable=True)
+    passing_tds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interceptions: Mapped[int | None] = mapped_column(Integer, nullable=True)  # thrown
+    carries: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rushing_yards: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rushing_tds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    receptions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    targets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    receiving_yards: Mapped[float | None] = mapped_column(Float, nullable=True)
+    receiving_tds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fantasy_points: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fantasy_points_ppr: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Defense (Pro-Football-Reference advanced stats)
+    sacks: Mapped[float | None] = mapped_column(Float, nullable=True)
+    combined_tackles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    def_interceptions: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressures: Mapped[float | None] = mapped_column(Float, nullable=True)

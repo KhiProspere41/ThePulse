@@ -5,10 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import SessionLocal, init_db
+from app.database import SessionLocal
 from app.ingest import refresh_all_leagues
 from app.routers import elo, futures, lines, odds, picks, player_stats, props, slips, stats
 from app.scheduler import start_scheduler
+from app.scripts.migrate import migrate
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    migrate()
 
     db = SessionLocal()
     try:

@@ -1,0 +1,15 @@
+# Phase 2 data pipeline (load_historical_data.py, compute_elo.py).
+# Separate from requirements.txt because nfl-data-py's own pin (pandas<2.0)
+# has no prebuilt wheel for recent Python versions and fails to build from
+# source. Install with:
+#
+#   pip install -r requirements-data.txt
+#   pip install --no-deps nfl-data-py==0.3.3
+#
+# (nfl-data-py's actual code works fine against modern pandas/numpy — only
+# its metadata pin is stale — so --no-deps skips that broken constraint.)
+
+pandas==3.0.5
+numpy==2.5.2
+appdirs==1.4.4
+pyarrow==25.0.1

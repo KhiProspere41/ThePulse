@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: thepulse-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ODDS_API_KEY
+        sync: false
+      - key: CFBD_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: NFL_SEASON_START
+        value: "2026-09-10T00:15:00"
+      - key: CFB_SEASON_START
+        value: "2026-09-03T00:00:00"
+      - key: ODDS_REFRESH_INTERVAL_HOURS
+        value: "2"

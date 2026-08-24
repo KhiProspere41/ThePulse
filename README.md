@@ -37,8 +37,8 @@ ThePulse/
 │   └── .env.example
 └── frontend/
     ├── src/
-    │   ├── pages/          # Home, GameDetail, Picks, Dashboard
-    │   ├── components/     # GamesTable, OddsComparisonTable, PickForm, PicksList, ClvTrendChart
+    │   ├── pages/          # Home, GameDetail, Picks, Dashboard, EloValue
+    │   ├── components/     # GamesTable, OddsComparisonTable, PickForm, PicksList, ClvTrendChart, LeagueWeekSelector
     │   └── api.js           # axios client for the backend
     └── .env.example
 ```
@@ -156,6 +156,75 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+## Deploying to production (free tier)
+
+This deploys to three free services: **Neon** (Postgres), **Render** (FastAPI
+backend), **Vercel** (React frontend). All three have genuinely free tiers —
+no card required for the basics — which is why this combo instead of, say,
+Railway (no permanent free tier) or Render's own Postgres (free tier expires
+after 90 days, a bad fit for anything meant to stay up).
+
+I can't create these accounts or click through their dashboards for you —
+that's exactly the kind of action this assistant is built to not do on your
+behalf. Everything below is what you'll do yourself; ask me if any step needs
+troubleshooting.
+
+**1. Database — [Neon](https://neon.tech)**
+1. Sign up, create a project (any region).
+2. Copy the connection string it gives you (starts `postgresql://`, already
+   includes `?sslmode=require`). Save it — this is `DATABASE_URL`.
+
+**2. Backend — [Render](https://render.com)**
+1. Sign up, connect your GitHub account, select the `ThePulse` repo.
+2. Render should detect `render.yaml` at the repo root and offer to create
+   the `thepulse-backend` web service from it. If it doesn't, create a new
+   **Web Service** manually with: root directory `backend`, build command
+   `pip install -r requirements.txt`, start command
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+3. Set these environment variables in the Render dashboard (they're marked
+   `sync: false` in `render.yaml`, meaning Render won't set them for you):
+   - `ODDS_API_KEY` — your real key
+   - `CFBD_API_KEY` — your real key (only needed if you'll run the historical
+     pipelines from a shell on Render; skip it if not)
+   - `DATABASE_URL` — the Neon connection string from step 1
+   - `FRONTEND_ORIGIN` — leave a placeholder for now (e.g. `http://localhost:5173`);
+     you'll come back and set this to your real Vercel URL in step 4
+4. Deploy. Once it's up, note the URL Render gives you
+   (`https://thepulse-backend-xxxx.onrender.com`) — you'll need it for the
+   frontend. Confirm it's alive: `curl https://your-render-url/health`.
+5. (Optional) Load historical data + Elo so `/elo/*` and the dashboard have
+   something to show — open a Render shell for the service and run the same
+   commands as local setup (step 2 above): `pip install -r requirements-data.txt`,
+   `pip install --no-deps nfl-data-py==0.3.3`, then the `load_historical_*`
+   and `compute_elo` commands.
+
+**3. Frontend — [Vercel](https://vercel.com)**
+1. Sign up, import the `ThePulse` repo.
+2. Set the project's root directory to `frontend`. Vercel auto-detects Vite;
+   no build/output config needed (`vercel.json` in `frontend/` handles the
+   client-side routing rewrite React Router needs).
+3. Set environment variable `VITE_API_BASE_URL` to your Render backend URL
+   from step 2.4.
+4. Deploy. Note the URL Vercel gives you
+   (`https://the-pulse-xxxx.vercel.app`).
+
+**4. Close the loop**
+Go back to Render and update `FRONTEND_ORIGIN` to your real Vercel URL, then
+redeploy the backend (Render redeploys automatically on an env var change).
+Without this, the browser will block API requests with a CORS error.
+
+**Known limitations of the free tier for a resume project:**
+- Render's free web service sleeps after ~15 minutes of no traffic and takes
+  a few seconds to wake on the next request — expected for a demo, not
+  something to "fix."
+- While asleep, the APScheduler odds refresh doesn't run (there's no process
+  to run it in). Odds refresh on a schedule while the service is awake, and
+  once on every cold start via the startup fetch in `main.py`'s lifespan —
+  good enough to keep data reasonably fresh for anyone visiting.
+- The Odds API free tier is 500 requests/month; each cold start burns one
+  request per league. Fine for occasional demo traffic, not for anything with
+  real usage.
 
 ## API routes
 

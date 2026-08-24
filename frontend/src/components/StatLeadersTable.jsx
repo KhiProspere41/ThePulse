@@ -9,15 +9,24 @@ const COLUMNS = {
     { label: 'Yds', key: 'passing_yards', highlight: true },
     { label: 'TD', key: 'passing_tds' },
     { label: 'INT', key: 'interceptions' },
+    { label: 'aDOT', key: 'passing_air_yards_per_att', title: 'Intended air yards per attempt (PFR)' },
+    { label: 'On Tgt%', key: 'passing_on_tgt_pct', pct: true, title: 'On-target throw rate (PFR)' },
+    { label: 'Pressure%', key: 'passing_pressure_pct', pct: true, title: 'Pressured dropback rate (PFR)' },
   ],
   rushing: [
     { label: 'Yds', key: 'rushing_yards', highlight: true },
     { label: 'TD', key: 'rushing_tds' },
+    { label: 'YBC', key: 'rush_yards_before_contact', title: 'Yards before contact (PFR)' },
+    { label: 'YAC', key: 'rush_yards_after_contact', title: 'Yards after contact (PFR)' },
+    { label: 'Broken Tkl', key: 'rush_broken_tackles', title: 'Broken tackles forced (PFR)' },
   ],
   receiving: [
     { label: 'Rec', key: 'receptions' },
     { label: 'Yds', key: 'receiving_yards', highlight: true },
     { label: 'TD', key: 'receiving_tds' },
+    { label: 'aDOT', key: 'rec_avg_depth_of_target', title: 'Average depth of target (PFR)' },
+    { label: 'YAC', key: 'rec_yards_after_catch', title: 'Yards after catch (PFR)' },
+    { label: 'Drop%', key: 'rec_drop_pct', pct: true, title: 'Drop rate (PFR)' },
   ],
   defense: [
     { label: 'Sacks', key: 'sacks', highlight: true },
@@ -26,7 +35,11 @@ const COLUMNS = {
   ],
 }
 
-const fmt = (value) => (value == null ? '—' : Number.isInteger(value) ? value : value.toFixed(1))
+const fmt = (value, pct) => {
+  if (value == null) return '—'
+  if (pct) return `${(value * 100).toFixed(1)}%`
+  return Number.isInteger(value) ? value : value.toFixed(1)
+}
 
 export default function StatLeadersTable({ category, players }) {
   const columns = COLUMNS[category] ?? COLUMNS.overall
@@ -44,7 +57,7 @@ export default function StatLeadersTable({ category, players }) {
             <th className="text-left px-4 py-3">Player</th>
             <th className="text-left px-4 py-3">Team</th>
             {columns.map((col) => (
-              <th key={col.key} className="text-right px-4 py-3">
+              <th key={col.key} className="text-right px-4 py-3" title={col.title}>
                 {col.label}
               </th>
             ))}
@@ -66,7 +79,7 @@ export default function StatLeadersTable({ category, players }) {
                     col.highlight ? 'text-emerald-400 font-semibold' : 'text-slate-300'
                   }`}
                 >
-                  {fmt(p[col.key])}
+                  {fmt(p[col.key], col.pct)}
                 </td>
               ))}
             </tr>

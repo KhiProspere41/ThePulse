@@ -60,6 +60,18 @@ def _row_out(r: models.PlayerSeasonStats) -> dict:
         "sacks": r.sacks,
         "combined_tackles": r.combined_tackles,
         "def_interceptions": r.def_interceptions,
+        # Advanced (Pro-Football-Reference) — supplemental, can be null even
+        # when the core stat above it is populated.
+        "passing_pressure_pct": r.passing_pressure_pct,
+        "passing_on_tgt_pct": r.passing_on_tgt_pct,
+        "passing_air_yards_per_att": r.passing_air_yards_per_att,
+        "rush_yards_before_contact": r.rush_yards_before_contact,
+        "rush_yards_after_contact": r.rush_yards_after_contact,
+        "rush_broken_tackles": r.rush_broken_tackles,
+        "rec_yards_after_catch": r.rec_yards_after_catch,
+        "rec_avg_depth_of_target": r.rec_avg_depth_of_target,
+        "rec_broken_tackles": r.rec_broken_tackles,
+        "rec_drop_pct": r.rec_drop_pct,
     }
 
 

@@ -222,3 +222,18 @@ class PlayerSeasonStats(Base):
     combined_tackles: Mapped[float | None] = mapped_column(Float, nullable=True)
     def_interceptions: Mapped[float | None] = mapped_column(Float, nullable=True)
     pressures: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Offense advanced (Pro-Football-Reference) — supplements, not replaces,
+    # the core offense columns above, which come from nflverse's own file.
+    # PFR's advanced passing table carries pressure/accuracy context but not
+    # the core yards/TD counting stats, so it's additive rather than a swap.
+    passing_pressure_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    passing_on_tgt_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    passing_air_yards_per_att: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_yards_before_contact: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_yards_after_contact: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_broken_tackles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_yards_after_catch: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_avg_depth_of_target: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_broken_tackles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_drop_pct: Mapped[float | None] = mapped_column(Float, nullable=True)

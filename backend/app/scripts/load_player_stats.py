@@ -191,6 +191,72 @@ def load_season(season: int) -> int:
             record.def_interceptions = agg["ints"]
             record.pressures = agg["prss"]
 
+        # PFR's advanced passing/rushing/receiving tables — pressure rate, air
+        # yards, yards before/after contact, broken tackles, drop rate. These
+        # supplement the core yards/TD counting stats already loaded from
+        # nflverse's file above, they don't replace them (PFR's passing table
+        # in particular carries no yardage/TD columns at all). Same "*TM"
+        # summary-row trap as defense applies here too — confirmed it before
+        # writing this, not after: all three tables have it.
+        def _pfr_summary_row_per_player(df: pd.DataFrame, team_col: str) -> dict:
+            rows: dict[str, object] = {}
+            for row in df.itertuples():
+                pid = row.pfr_id
+                key = str(pid) if pd.notna(pid) else f"noid:{row.player}:{getattr(row, team_col)}"
+                is_summary = str(getattr(row, team_col)).endswith("TM")
+                if key not in rows or is_summary:
+                    rows[key] = row
+            return rows
+
+        try:
+            logger.info("Fetching advanced passing stats for %d", season)
+            for key, row in _pfr_summary_row_per_player(nfl.import_seasonal_pfr("pass", [season]), "team").items():
+                player_id = pfr_to_gsis.get(key, f"pfr:{key}")
+                record = pending.get((player_id, season)) or db.get(
+                    models.PlayerSeasonStats, {"player_id": player_id, "season": season}
+                )
+                if record is None:
+                    continue  # advanced-only row with no core stats to anchor it to — skip rather than half-populate
+                # PFR's "pass" table stores these on a 0-100 scale, unlike its
+                # "rec" table's drop_percent (0-1) — normalize both to 0-1
+                # fractions here, matching every other probability-style field
+                # in this codebase (implied_prob, elo win probabilities, etc.),
+                # so one consistent frontend formatter works for all of them.
+                record.passing_pressure_pct = float(row.pressure_pct) / 100 if pd.notna(row.pressure_pct) else None
+                record.passing_on_tgt_pct = float(row.on_tgt_pct) / 100 if pd.notna(row.on_tgt_pct) else None
+                record.passing_air_yards_per_att = (
+                    float(row.intended_air_yards_per_pass_attempt)
+                    if pd.notna(row.intended_air_yards_per_pass_attempt)
+                    else None
+                )
+
+            logger.info("Fetching advanced rushing stats for %d", season)
+            for key, row in _pfr_summary_row_per_player(nfl.import_seasonal_pfr("rush", [season]), "tm").items():
+                player_id = pfr_to_gsis.get(key, f"pfr:{key}")
+                record = pending.get((player_id, season)) or db.get(
+                    models.PlayerSeasonStats, {"player_id": player_id, "season": season}
+                )
+                if record is None:
+                    continue
+                record.rush_yards_before_contact = float(row.ybc) if pd.notna(row.ybc) else None
+                record.rush_yards_after_contact = float(row.yac) if pd.notna(row.yac) else None
+                record.rush_broken_tackles = float(row.brk_tkl) if pd.notna(row.brk_tkl) else None
+
+            logger.info("Fetching advanced receiving stats for %d", season)
+            for key, row in _pfr_summary_row_per_player(nfl.import_seasonal_pfr("rec", [season]), "tm").items():
+                player_id = pfr_to_gsis.get(key, f"pfr:{key}")
+                record = pending.get((player_id, season)) or db.get(
+                    models.PlayerSeasonStats, {"player_id": player_id, "season": season}
+                )
+                if record is None:
+                    continue
+                record.rec_yards_after_catch = float(row.yac) if pd.notna(row.yac) else None
+                record.rec_avg_depth_of_target = float(row.adot) if pd.notna(row.adot) else None
+                record.rec_broken_tackles = float(row.brk_tkl) if pd.notna(row.brk_tkl) else None
+                record.rec_drop_pct = float(row.drop_percent) if pd.notna(row.drop_percent) else None
+        except (HTTPError, Exception) as exc:
+            logger.warning("Advanced PFR passing/rushing/receiving stats unavailable for %d yet (%s).", season, exc)
+
         db.commit()
         logger.info("Loaded stats for %d players in season %d.", written, season)
         return written

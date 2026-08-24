@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # --- Season simulation ------------------------------------------------
     sim_iterations: int = 10_000
     sim_cache_minutes: int = 30
+    # Absolute ceiling on iterations for any simulation run, including ones
+    # triggered internally (scripts, tests). 100k iterations measured ~23s of
+    # wall time; this is a backstop against that, not just against a public
+    # `iterations=` override — the API no longer exposes one at all.
+    sim_max_iterations: int = 20_000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

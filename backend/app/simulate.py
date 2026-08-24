@@ -36,7 +36,7 @@ import logging
 import math
 import random
 from bisect import bisect_left
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 from sqlalchemy.orm import Session
 
@@ -56,7 +56,28 @@ ABBR_TO_NAME = {abbr: name for name, abbr in ODDS_API_NAME_TO_ABBR.items()}
 # In-process cache: the simulation is deterministic given (season, iterations,
 # ratings, schedule) and takes a couple of seconds, which is too slow to redo
 # on every page load but far too cheap to bother persisting.
-_cache: dict[tuple, tuple[dt.datetime, dict]] = {}
+#
+# Bounded and LRU-evicted on purpose, not just TTL-checked on read: `season`
+# and `iterations` reach this from public, unauthenticated query params (see
+# routers/futures.py), so an unbounded dict here is a memory-growth vector —
+# every distinct combination a caller sends adds a permanent entry otherwise.
+_CACHE_MAX_ENTRIES = 16
+_cache: "OrderedDict[tuple, tuple[dt.datetime, dict]]" = OrderedDict()
+
+
+def _cache_get(key: tuple) -> dict | None:
+    entry = _cache.get(key)
+    if entry is None:
+        return None
+    _cache.move_to_end(key)
+    return entry
+
+
+def _cache_put(key: tuple, value: dict) -> None:
+    _cache[key] = value
+    _cache.move_to_end(key)
+    while len(_cache) > _CACHE_MAX_ENTRIES:
+        _cache.popitem(last=False)
 
 
 def season_of(commence_time: dt.datetime) -> int:
@@ -334,12 +355,21 @@ def simulate_season(
     seed: int | None = None,
     refresh: bool = False,
 ) -> dict:
-    """Run (or serve from cache) a full-season simulation."""
+    """Run (or serve from cache) a full-season simulation.
+
+    `iterations` and `seed` are deliberately not settable from the public API
+    (see routers/futures.py) — this signature keeps them for scripts/tests,
+    but the clamp below is a backstop, not the primary control. A single
+    100k-iteration run measured ~23s of wall time; letting an unauthenticated
+    caller pick both `iterations` and an arbitrary `seed` turned that into an
+    unbounded-cost, cache-defeating DoS. `settings.sim_max_iterations` is the
+    real ceiling for anything reachable from a request.
+    """
     season = season or current_season()
-    iterations = max(200, min(iterations or settings.sim_iterations, 100_000))
+    iterations = max(200, min(iterations or settings.sim_iterations, settings.sim_max_iterations))
 
     cache_key = (season, iterations, seed)
-    cached = _cache.get(cache_key)
+    cached = _cache_get(cache_key)
     if cached and not refresh:
         generated_at, payload = cached
         if dt.datetime.utcnow() - generated_at < dt.timedelta(minutes=settings.sim_cache_minutes):
@@ -410,7 +440,7 @@ def simulate_season(
         "teams": teams_out,
     }
 
-    _cache[cache_key] = (dt.datetime.utcnow(), payload)
+    _cache_put(cache_key, (dt.datetime.utcnow(), payload))
     logger.info(
         "Simulated season %s: %d iterations over %d remaining games in %.2fs",
         season, iterations, len(remaining), elapsed,

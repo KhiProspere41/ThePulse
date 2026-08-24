@@ -103,26 +103,30 @@ def super_bowl_futures(
 @router.get("/futures/simulation")
 def futures_simulation(
     season: int | None = Query(None, description="Defaults to the season in progress"),
-    iterations: int | None = Query(None, ge=200, le=100_000),
-    seed: int | None = Query(None, description="Fix the RNG seed for a reproducible run"),
     refresh: bool = Query(False, description="Bypass the simulation cache"),
     db: Session = Depends(get_db),
 ):
     """Model probabilities for division titles, season win totals, playoff
-    berths and the Super Bowl, from a Monte Carlo run over the Elo ratings."""
-    return simulate_season(db, season=season, iterations=iterations, seed=seed, refresh=refresh)
+    berths and the Super Bowl, from a Monte Carlo run over the Elo ratings.
+
+    Iteration count and RNG seed are fixed server-side (`settings.sim_iterations`),
+    not caller-supplied: a 100k-iteration run measured ~23s of wall time, and an
+    arbitrary seed defeats the cache on every request. Letting an unauthenticated
+    caller control both is an easy denial-of-service, not a real feature — nothing
+    in the UI ever needs a specific seed or a non-default iteration count.
+    """
+    return simulate_season(db, season=season, refresh=refresh)
 
 
 @router.get("/futures/board")
 def futures_board(
-    iterations: int | None = Query(None, ge=200, le=100_000),
     refresh: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """One row per team combining everything: Elo, projected record, division
     and win-total probabilities, and the model's Super Bowl number against the
     market's devigged fair price plus the best available payout."""
-    sim = simulate_season(db, iterations=iterations, refresh=refresh)
+    sim = simulate_season(db, refresh=refresh)
     market = _devigged_market(latest_futures(db))
 
     rows = []
@@ -160,12 +164,9 @@ def futures_board(
 
 
 @router.get("/futures/divisions")
-def division_races(
-    iterations: int | None = Query(None, ge=200, le=100_000),
-    db: Session = Depends(get_db),
-):
+def division_races(db: Session = Depends(get_db)):
     """Division-title probabilities grouped by division, longest odds last."""
-    sim = simulate_season(db, iterations=iterations)
+    sim = simulate_season(db)
     by_division: dict[str, list[dict]] = {name: [] for name in DIVISIONS}
     for team in sim["teams"]:
         by_division[team["division"]].append(

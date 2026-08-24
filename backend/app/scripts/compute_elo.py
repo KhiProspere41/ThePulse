@@ -1,28 +1,39 @@
 """Runs the Elo model over completed historical games (loaded via
-load_historical_data.py) to build current team ratings, then compares the
-Elo-implied win probability against the Vegas closing line for each upcoming
-game to flag potential value. Run with: python -m app.scripts.compute_elo
+load_historical_data.py / load_historical_cfb_data.py) to build current team
+ratings, then compares the Elo-implied win probability against the market's
+closing line for each upcoming game to flag potential value. Run with:
+
+    python -m app.scripts.compute_elo --league nfl
+    python -m app.scripts.compute_elo --league college
 """
 
+import argparse
 import logging
 
 from app import models
 from app.database import SessionLocal, init_db
 from app.elo import INITIAL_RATING, elo_win_prob, update_ratings
 from app.probability import american_to_implied_prob, remove_vig
-from app.teams import to_elo_key
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def compute_ratings() -> dict[str, float]:
-    """Replay every completed NFL game in chronological order to derive ratings."""
+def _to_elo_key(league: str):
+    if league == "college":
+        from app.teams_cfb import to_elo_key
+    else:
+        from app.teams import to_elo_key
+    return to_elo_key
+
+
+def compute_ratings(league: str = "nfl") -> dict[str, float]:
+    """Replay every completed game for a league in chronological order to derive ratings."""
     db = SessionLocal()
     try:
         games = (
             db.query(models.Game)
-            .filter(models.Game.league == "nfl", models.Game.completed.is_(True))
+            .filter(models.Game.league == league, models.Game.completed.is_(True))
             .order_by(models.Game.commence_time)
             .all()
         )
@@ -37,30 +48,31 @@ def compute_ratings() -> dict[str, float]:
             )
 
         for team, rating in ratings.items():
-            row = db.get(models.TeamElo, {"team": team, "league": "nfl"})
+            row = db.get(models.TeamElo, {"team": team, "league": league})
             if row is None:
-                row = models.TeamElo(team=team, league="nfl")
+                row = models.TeamElo(team=team, league=league)
                 db.add(row)
             row.rating = rating
         db.commit()
-        logger.info("Computed Elo ratings for %d teams from %d games.", len(ratings), len(games))
+        logger.info("Computed Elo ratings for %d %s teams from %d games.", len(ratings), league, len(games))
         return ratings
     finally:
         db.close()
 
 
-def find_value_games() -> list[dict]:
+def find_value_games(league: str = "nfl") -> list[dict]:
     """For upcoming (not-yet-completed) games with a moneyline available, compare
     the Elo win probability to the market's vig-free implied probability."""
+    to_elo_key = _to_elo_key(league)
     db = SessionLocal()
     value_games = []
     try:
         upcoming = (
             db.query(models.Game)
-            .filter(models.Game.league == "nfl", models.Game.completed.is_(False))
+            .filter(models.Game.league == league, models.Game.completed.is_(False))
             .all()
         )
-        ratings = {r.team: r.rating for r in db.query(models.TeamElo).filter_by(league="nfl").all()}
+        ratings = {r.team: r.rating for r in db.query(models.TeamElo).filter_by(league=league).all()}
 
         for game in upcoming:
             home_ml = next(
@@ -96,7 +108,11 @@ def find_value_games() -> list[dict]:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--league", choices=["nfl", "college"], default="nfl")
+    args = parser.parse_args()
+
     init_db()
-    compute_ratings()
-    for g in find_value_games():
+    compute_ratings(args.league)
+    for g in find_value_games(args.league):
         logger.info(g)

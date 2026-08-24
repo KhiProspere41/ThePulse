@@ -3,8 +3,8 @@
 Football betting odds aggregator and pick tracker (MVP). Pulls live odds from
 [The Odds API](https://the-odds-api.com), lets you compare lines across
 sportsbooks, log picks, and track closing line value (CLV), win rate, and ROI.
-Includes a simple Elo model for NFL teams to flag potential value against the
-market.
+Includes a simple Elo model for NFL and college (FBS) teams to flag potential
+value against the market.
 
 **Stack:** FastAPI + SQLAlchemy (SQLite for local dev, Postgres for prod) · React + Vite + TailwindCSS · APScheduler.
 
@@ -21,7 +21,9 @@ ThePulse/
 │   │   ├── schemas.py         # Pydantic request/response models
 │   │   ├── odds_api.py        # The Odds API client
 │   │   ├── ingest.py          # raw odds -> DB rows, closing-line + CLV backfill
-│   │   ├── elo.py             # Elo rating math
+│   │   ├── elo.py             # Elo rating math (shared by both leagues)
+│   │   ├── teams.py           # Odds API NFL team name -> nflverse abbreviation
+│   │   ├── teams_cfb.py       # Odds API CFB team name -> CFBD school name (generated)
 │   │   ├── probability.py     # American odds / spread <-> implied probability
 │   │   ├── scheduler.py       # APScheduler: refresh odds every N hours
 │   │   ├── routers/           # odds, lines, picks, stats, elo endpoints
@@ -29,7 +31,8 @@ ThePulse/
 │   │       ├── init_db.py                  # create tables ("migration" for MVP)
 │   │       ├── load_historical_data.py     # nfl-data-py -> games + closing lines
 │   │       ├── load_historical_cfb_data.py # CFBD API -> college games + closing lines
-│   │       └── compute_elo.py              # replay history -> Elo ratings + value (NFL only)
+│   │       ├── generate_cfb_teams.py       # (re)generates teams_cfb.py from CFBD's /teams
+│   │       └── compute_elo.py              # replay history -> Elo ratings + value
 │   ├── requirements.txt
 │   └── .env.example
 └── frontend/
@@ -88,7 +91,7 @@ Then, with the venv active:
 
 ```bash
 python -m app.scripts.load_historical_data --seasons 2024 2025
-python -m app.scripts.compute_elo
+python -m app.scripts.compute_elo --league nfl
 ```
 
 This pulls the last 2 NFL seasons (schedules, final scores, closing Vegas
@@ -98,13 +101,32 @@ computes Elo ratings + Elo-vs-market value for upcoming games.
 
 For college football, load the last 2 FBS seasons (schedules, final scores,
 closing betting lines) from [CollegeFootballData.com](https://collegefootballdata.com/)
-— no extra packages needed, it's called directly over `httpx`:
+— no extra packages needed, it's called directly over `httpx` — then compute
+Elo the same way:
 
 ```bash
 python -m app.scripts.load_historical_cfb_data --seasons 2024 2025
+python -m app.scripts.compute_elo --league college
 ```
 
-There's no college Elo — the Elo model is NFL-only.
+Both leagues share the same Elo math (`app/elo.py`) and are independent —
+`--league` picks which one to (re)compute; there's no cross-league rating.
+`/elo/ratings` and `/elo/value` both take a `league=nfl|college` query param
+(default `nfl`).
+
+Live odds use full mascot names ("Ohio State Buckeyes") while each historical
+source uses its own convention (nflverse abbreviations for NFL, CFBD's school
+name for college — which itself sometimes differs from the live feed, e.g.
+CFBD's "App State" vs. the live feed's "Appalachian State Mountaineers").
+`app/teams.py` and `app/teams_cfb.py` bridge that gap so Elo ratings actually
+match up with live games; `teams_cfb.py` is generated (not hand-typed) from
+CFBD's own `/teams` endpoint via `generate_cfb_teams.py`, since guessing 138
+schools' mascots and aliases by hand is exactly how you get it wrong. Re-run
+the generator if team names drift (conference realignment, rebrands):
+
+```bash
+python -m app.scripts.generate_cfb_teams
+```
 
 ### 3. Postgres for production
 
@@ -145,8 +167,8 @@ Open `http://localhost:5173`.
 | GET | `/picks` | Saved picks, with CLV backfilled once games kick off |
 | PATCH | `/picks/{id}/result` | Set a pick's result (win/loss/push) |
 | GET | `/stats/dashboard` | Win rate, ROI, avg CLV, CLV trend |
-| GET | `/elo/ratings` | Current Elo ratings by team |
-| GET | `/elo/value` | Upcoming games where Elo diverges from the market |
+| GET | `/elo/ratings?league={nfl\|college}` | Current Elo ratings by team |
+| GET | `/elo/value?league={nfl\|college}` | Upcoming games where Elo diverges from the market |
 | GET | `/health` | Liveness check |
 
 ## Notes / MVP constraints
@@ -165,3 +187,9 @@ Open `http://localhost:5173`.
 - College betting lines from CFBD don't include vig-adjusted spread/total
   prices (only the number, not the odds), so those default to -110; the
   moneylines themselves are real.
+- `/picks` and `/stats/dashboard` backfill closing lines/CLV on every request,
+  but only for games that have an unresolved pick — not every started game.
+  With thousands of historical games loaded for Elo, recomputing closing
+  lines for all of them on every dashboard load isn't just wasted work, it's
+  a genuinely bad response time (this was a real regression caught while
+  testing: ~17s per request before scoping it down, <150ms after).

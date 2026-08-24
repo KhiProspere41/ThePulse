@@ -6,14 +6,18 @@ import { formatPct } from '../format'
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
+  const [eloLeague, setEloLeague] = useState('nfl')
   const [eloValue, setEloValue] = useState([])
 
   useEffect(() => {
     getDashboard().then(setStats)
-    getEloValue()
+  }, [])
+
+  useEffect(() => {
+    getEloValue(eloLeague)
       .then(setEloValue)
       .catch(() => setEloValue([]))
-  }, [])
+  }, [eloLeague])
 
   if (!stats) return <div className="max-w-6xl mx-auto px-4 py-8 text-slate-500">Loading…</div>
 
@@ -37,9 +41,26 @@ export default function Dashboard() {
         <ClvTrendChart data={stats.clv_trend} />
       </div>
 
-      {eloValue.length > 0 && (
-        <div>
-          <h2 className="font-semibold text-slate-200 mb-2">Elo vs. Market (potential value)</h2>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-semibold text-slate-200">Elo vs. Market (potential value)</h2>
+          <select
+            value={eloLeague}
+            onChange={(e) => setEloLeague(e.target.value)}
+            className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm"
+          >
+            <option value="nfl">NFL</option>
+            <option value="college">College</option>
+          </select>
+        </div>
+
+        {eloValue.length === 0 ? (
+          <p className="text-slate-500 text-sm py-6 text-center">
+            No upcoming games with both an Elo rating and a moneyline yet. Run{' '}
+            <code className="text-slate-400">compute_elo.py --league {eloLeague}</code> after loading
+            historical data.
+          </p>
+        ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-800">
             <table className="w-full text-sm">
               <thead className="bg-slate-900 text-slate-400 uppercase text-xs tracking-wide">
@@ -69,8 +90,8 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

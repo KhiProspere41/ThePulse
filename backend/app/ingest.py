@@ -80,13 +80,27 @@ def refresh_all_leagues(db: Session) -> None:
 
 
 def update_closing_lines_and_clv(db: Session) -> int:
-    """For any game that has started, mark each bookmaker/market/side's most recent
-    snapshot before kickoff as the closing line, then backfill CLV on picks."""
+    """For any started game with a pick still missing its closing line, mark
+    each bookmaker/market/side's most recent snapshot before kickoff as the
+    closing line, then backfill CLV on that pick.
+
+    Scoped to games with an unresolved pick (rather than every started game)
+    because this runs on every GET /picks and /stats/dashboard request — with
+    thousands of historical games loaded for Elo/backtesting, recomputing
+    closing lines for all of them on every request is a needless N+1 cost
+    that has nothing to do with picks a user actually made.
+    """
     now = dt.datetime.utcnow()
-    started_games = db.query(models.Game).filter(models.Game.commence_time <= now).all()
+    games_needing_backfill = (
+        db.query(models.Game)
+        .join(models.Pick)
+        .filter(models.Game.commence_time <= now, models.Pick.closing_price.is_(None))
+        .distinct()
+        .all()
+    )
     updated = 0
 
-    for game in started_games:
+    for game in games_needing_backfill:
         snapshots = (
             db.query(models.OddsSnapshot)
             .filter(

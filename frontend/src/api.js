@@ -18,8 +18,8 @@ export const setPickResult = (id, result) =>
 
 export const getDashboard = () => api.get('/stats/dashboard').then((r) => r.data)
 
-export const getEloRatings = () => api.get('/elo/ratings').then((r) => r.data)
+export const getEloRatings = (league = 'nfl') => api.get('/elo/ratings', { params: { league } }).then((r) => r.data)
 
-export const getEloValue = () => api.get('/elo/value').then((r) => r.data)
+export const getEloValue = (league = 'nfl') => api.get('/elo/value', { params: { league } }).then((r) => r.data)
 
 export default api

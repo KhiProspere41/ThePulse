@@ -2,16 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getLines } from '../api'
 import OddsComparisonTable from '../components/OddsComparisonTable'
-import PickForm from '../components/PickForm'
 import PlayerPropsPanel from '../components/PlayerPropsPanel'
-import { formatDate } from '../format'
+import { formatDate, formatPoint, marketLabel } from '../format'
+import { useSlip } from '../slipContext'
 
 export default function GameDetail() {
   const { id } = useParams()
   const [data, setData] = useState(null)
-  const [prefill, setPrefill] = useState(null)
   const [error, setError] = useState(null)
-  const [savedMsg, setSavedMsg] = useState(false)
+  const { addLeg } = useSlip()
 
   function refresh() {
     getLines(id)
@@ -25,6 +24,7 @@ export default function GameDetail() {
   if (!data) return <div className="max-w-6xl mx-auto px-4 py-8 text-slate-500">Loading…</div>
 
   const { game, bookmakers } = data
+  const matchup = `${game.away_team} @ ${game.home_team}`
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -33,57 +33,49 @@ export default function GameDetail() {
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold">
-          {game.away_team} @ {game.home_team}
-        </h1>
+        <h1 className="text-2xl font-bold">{matchup}</h1>
         <p className="text-slate-400 text-sm">{formatDate(game.commence_time)}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <OddsComparisonTable
-            game={game}
-            bookmakers={bookmakers}
-            onPick={(odd, row) => {
-              setSavedMsg(false)
-              setPrefill({
-                betType: 'game',
-                market: row.market,
-                selection:
-                  row.side === 'home' ? game.home_team : row.side === 'away' ? game.away_team : row.side,
-                point: odd.point,
-                price: odd.price,
-              })
-            }}
-          />
-        </div>
-        <div>
-          <PickForm
-            game={game}
-            prefill={prefill}
-            onSaved={() => {
-              setSavedMsg(true)
-              setPrefill(null)
-            }}
-          />
-          {savedMsg && <p className="text-emerald-400 text-xs mt-2">Pick saved ✓</p>}
-        </div>
+      <div>
+        <OddsComparisonTable
+          game={game}
+          bookmakers={bookmakers}
+          onPick={(odd, row) => {
+            const selection =
+              row.side === 'home' ? game.home_team : row.side === 'away' ? game.away_team : row.side
+            addLeg({
+              key: `${game.id}-${row.market}-${row.side}`,
+              matchup,
+              label: `${selection}${odd.point != null ? ` ${formatPoint(odd.point)}` : ''} (${marketLabel(row.market)})`,
+              game_id: game.id,
+              bet_type: 'game',
+              market: row.market,
+              selection,
+              player: null,
+              point: odd.point,
+              entry_price: odd.price,
+            })
+          }}
+        />
       </div>
 
       {game.league === 'nfl' && (
         <PlayerPropsPanel
           gameId={game.id}
           onPick={(prop) => {
-            setSavedMsg(false)
-            setPrefill({
-              betType: 'player_prop',
+            addLeg({
+              key: `${game.id}-${prop.market}-${prop.player}-${prop.side}`,
+              matchup,
+              label: `${prop.player} ${prop.side}${prop.point != null ? ` ${prop.point}` : ''} (${marketLabel(prop.market)})`,
+              game_id: game.id,
+              bet_type: 'player_prop',
               market: prop.market,
               selection: prop.side,
               player: prop.player,
               point: prop.point,
-              price: prop.price,
+              entry_price: prop.price,
             })
-            window.scrollTo({ top: 0, behavior: 'smooth' })
           }}
         />
       )}

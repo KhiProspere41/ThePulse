@@ -125,4 +125,34 @@ class PickOut(BaseModel):
     clv: float | None
     result: str
     notes: str | None
+    slip_id: int | None = None
     game: GameOut | None = None
+
+
+class SlipLegCreate(BaseModel):
+    game_id: str | None = None
+    bet_type: str = "game"
+    market: str
+    selection: str
+    player: str | None = None
+    point: float | None = None
+    entry_price: int
+    # Straight-mode legs are independently staked, like a standalone pick.
+    # Ignored for parlay legs — the slip's own `stake` is what's wagered.
+    stake: float = 1.0
+
+
+class SlipCreate(BaseModel):
+    mode: str  # straight | parlay
+    stake: float | None = None  # required for parlay; ignored for straight
+    legs: list[SlipLegCreate]
+
+
+class SlipOut(BaseModel):
+    id: int
+    mode: str
+    created_at: dt.datetime
+    stake: float | None
+    combined_price: int | None
+    result: str  # computed from the legs, not stored — see app.slips.parlay_result
+    legs: list[PickOut]

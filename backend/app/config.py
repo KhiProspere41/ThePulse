@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # going dark mid-month. Game lines are exempt: they are the core feature.
     odds_api_min_remaining: int = 25
 
+    # --- Player season stats ------------------------------------------------
+    # nflverse publishes each season's player_stats file only once it's over
+    # (previous seasons; a season in progress has no file yet) — this checks
+    # daily and loads it the first time it appears, so "current" stats/awards
+    # advance on their own instead of needing a manual re-run each fall.
+    player_stats_check_interval_hours: int = 24
+
     # --- Season simulation ------------------------------------------------
     sim_iterations: int = 10_000
     sim_cache_minutes: int = 30

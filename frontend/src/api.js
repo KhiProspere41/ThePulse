@@ -9,12 +9,12 @@ export const getOdds = (league = 'nfl', week) =>
 
 export const getLines = (gameId) => api.get('/lines', { params: { game: gameId } }).then((r) => r.data)
 
-export const createPick = (pick) => api.post('/picks', pick).then((r) => r.data)
-
-export const getPicks = () => api.get('/picks').then((r) => r.data)
-
 export const setPickResult = (id, result) =>
   api.patch(`/picks/${id}/result`, null, { params: { result } }).then((r) => r.data)
+
+export const createSlip = (slip) => api.post('/slips', slip).then((r) => r.data)
+
+export const getSlips = () => api.get('/slips').then((r) => r.data)
 
 export const getDashboard = () => api.get('/stats/dashboard').then((r) => r.data)
 

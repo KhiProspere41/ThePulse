@@ -26,3 +26,22 @@ NFL_MARGIN_STDEV = 13.86
 def spread_to_implied_prob(spread: float, stdev: float = NFL_MARGIN_STDEV) -> float:
     """Win probability for the team favored by `spread` points (negative = favorite)."""
     return 0.5 * (1 + math.erf(-spread / (stdev * math.sqrt(2))))
+
+
+def american_to_decimal(price: int) -> float:
+    """American odds -> decimal odds (the multiplier on stake for a win, stake included)."""
+    return 1 + price / 100 if price > 0 else 1 + 100 / -price
+
+
+def decimal_to_american(decimal: float) -> int:
+    """Decimal odds -> American odds, rounded to the nearest whole number."""
+    return round((decimal - 1) * 100) if decimal >= 2 else round(-100 / (decimal - 1))
+
+
+def parlay_combined_price(leg_prices: list[int]) -> int:
+    """Combined American odds for a parlay: each leg's decimal odds multiply
+    together (the standard sportsbook calculation), then convert back."""
+    combined_decimal = 1.0
+    for price in leg_prices:
+        combined_decimal *= american_to_decimal(price)
+    return decimal_to_american(combined_decimal)

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.ingest import update_closing_lines_and_clv
+from app.slips import parlay_result
 
 router = APIRouter(tags=["stats"])
 
@@ -14,27 +15,45 @@ def _profit(stake: float, price: int) -> float:
 
 @router.get("/stats/dashboard")
 def dashboard(db: Session = Depends(get_db)):
-    """Win rate, ROI, and CLV trend across all settled picks."""
+    """Win rate, ROI, and CLV trend across all settled bets.
+
+    A "bet" here is a standalone pick, a straight-slip leg (each staked and
+    graded independently, same as a standalone pick), or one parlay slip
+    (its own stake and combined price, at the slip level) — never a parlay
+    leg on its own, which would count one wager as several.
+    """
     update_closing_lines_and_clv(db)
     picks = db.query(models.Pick).order_by(models.Pick.entry_time).all()
+    parlays = db.query(models.Slip).filter(models.Slip.mode == "parlay").all()
+    parlay_leg_ids = {leg.id for slip in parlays for leg in slip.legs}
 
-    settled = [p for p in picks if p.result in ("win", "loss", "push")]
-    wins = sum(1 for p in settled if p.result == "win")
-    losses = sum(1 for p in settled if p.result == "loss")
+    bets = [
+        {"stake": p.stake, "price": p.entry_price, "result": p.result}
+        for p in picks
+        if p.id not in parlay_leg_ids
+    ] + [
+        {"stake": s.stake, "price": s.combined_price, "result": parlay_result(s.legs)}
+        for s in parlays
+        if s.stake and s.combined_price
+    ]
+
+    settled = [b for b in bets if b["result"] in ("win", "loss", "push")]
+    wins = sum(1 for b in settled if b["result"] == "win")
+    losses = sum(1 for b in settled if b["result"] == "loss")
     decided = wins + losses
 
-    total_staked = sum(p.stake for p in settled)
+    total_staked = sum(b["stake"] for b in settled)
     total_profit = 0.0
-    for p in settled:
-        if p.result == "win":
-            total_profit += _profit(p.stake, p.entry_price)
-        elif p.result == "loss":
-            total_profit -= p.stake
+    for b in settled:
+        if b["result"] == "win":
+            total_profit += _profit(b["stake"], b["price"])
+        elif b["result"] == "loss":
+            total_profit -= b["stake"]
 
     clv_values = [p.clv for p in picks if p.clv is not None]
 
     return {
-        "total_picks": len(picks),
+        "total_picks": len(bets),
         "settled_picks": len(settled),
         "win_rate": round(wins / decided, 4) if decided else None,
         "roi": round(total_profit / total_staked, 4) if total_staked else None,

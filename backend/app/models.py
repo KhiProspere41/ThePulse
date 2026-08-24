@@ -46,6 +46,32 @@ class OddsSnapshot(Base):
     game: Mapped["Game"] = relationship(back_populates="odds_snapshots")
 
 
+class Slip(Base):
+    """A bet slip: one or more picks placed together in one action.
+
+    In "straight" mode this is just a grouping — each leg is its own
+    independently-staked, independently-graded Pick, exactly as if it had
+    been saved on its own; the slip only exists so the UI can show "these 3
+    were placed together." In "parlay" mode the legs combine into a single
+    bet: one stake, one combined price (the product of each leg's decimal
+    odds), and a result that depends on every leg hitting. Each leg is still
+    its own Pick row either way — see Pick.slip_id and Pick.leg_result.
+    """
+
+    __tablename__ = "slips"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    mode: Mapped[str] = mapped_column(String)  # straight | parlay
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+    # Parlay only — a straight slip's "stake" and "price" are per-leg (on the
+    # Pick rows themselves), not on the slip.
+    stake: Mapped[float | None] = mapped_column(Float, nullable=True)
+    combined_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    legs: Mapped[list["Pick"]] = relationship(back_populates="slip", order_by="Pick.id")
+
+
 class Pick(Base):
     __tablename__ = "picks"
 
@@ -67,10 +93,17 @@ class Pick(Base):
     closing_point: Mapped[float | None] = mapped_column(Float, nullable=True)
     clv: Mapped[float | None] = mapped_column(Float, nullable=True)  # implied-prob edge, in %
 
+    # For a standalone pick or a straight-slip leg, this IS the bet's result
+    # and `result` below just mirrors it. For a parlay leg, this tracks
+    # whether that individual leg won/lost — needed to grade the parlay —
+    # while the parlay's own overall result lives on the Slip, not here.
     result: Mapped[str] = mapped_column(String, default="pending")  # pending|win|loss|push
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    slip_id: Mapped[int | None] = mapped_column(ForeignKey("slips.id"), nullable=True, index=True)
+
     game: Mapped["Game | None"] = relationship(back_populates="picks")
+    slip: Mapped["Slip | None"] = relationship(back_populates="legs")
 
 
 class TeamElo(Base):

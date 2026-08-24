@@ -4,7 +4,12 @@ services:
     runtime: python
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    # The data-pipeline extras (pandas/nfl-data-py) are installed here, not
+    # just in requirements.txt, so the scheduled player-stats season check
+    # (app/scheduler.py) can actually load a new season the day nflverse
+    # publishes it, not just detect that one exists. See requirements-data.txt
+    # for why nfl-data-py needs --no-deps.
+    buildCommand: pip install -r requirements.txt && pip install -r requirements-data.txt && pip install --no-deps nfl-data-py==0.3.3
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:

@@ -3,8 +3,8 @@ import { getFuturesBoard } from '../api'
 import SuperBowlBoard from '../components/SuperBowlBoard'
 import DivisionRaces from '../components/DivisionRaces'
 import WinTotalsTable from '../components/WinTotalsTable'
-import PickForm from '../components/PickForm'
 import { formatDate } from '../format'
+import { useSlip } from '../slipContext'
 
 const TABS = [
   { key: 'superbowl', label: 'Super Bowl' },
@@ -17,8 +17,7 @@ export default function Futures() {
   const [board, setBoard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [prefill, setPrefill] = useState(null)
-  const [saved, setSaved] = useState(false)
+  const { addLeg } = useSlip()
 
   useEffect(() => {
     setLoading(true)
@@ -75,45 +74,34 @@ export default function Futures() {
           <div className="lg:col-span-2">
             <SuperBowlBoard
               teams={board.teams}
-              onPick={(team) => {
-                setSaved(false)
-                setPrefill({
-                  betType: 'futures',
+              onPick={(team) =>
+                addLeg({
+                  key: `futures-superbowl-${team.team}`,
+                  matchup: 'Season futures',
+                  label: `${team.name} to win Super Bowl`,
+                  game_id: null,
+                  bet_type: 'futures',
                   market: 'outrights',
                   selection: team.name,
-                  price: team.market.best_price,
+                  player: null,
                   point: null,
+                  entry_price: team.market.best_price,
                 })
-              }}
+              }
             />
           </div>
-          <div className="space-y-3">
-            {prefill ? (
-              <>
-                <PickForm
-                  prefill={prefill}
-                  onSaved={() => {
-                    setSaved(true)
-                    setPrefill(null)
-                  }}
-                />
-                {saved && <p className="text-emerald-400 text-xs">Pick saved ✓</p>}
-              </>
-            ) : (
-              <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400 space-y-2">
-                <p className="font-semibold text-slate-200">Model vs. market</p>
-                <p className="text-xs leading-relaxed">
-                  Super Bowl prices are the only NFL futures feed The Odds API carries. Each book's
-                  board is stripped of vig before comparison. Raw Super Bowl boards hold well over
-                  30%, which would make every team look like value.
-                </p>
-                <p className="text-xs leading-relaxed">
-                  Division titles and win totals have no feed at all, so those tabs are pure model
-                  output from the same simulation.
-                </p>
-                <p className="text-xs text-slate-500">Click “Log pick” on any row to track a bet.</p>
-              </div>
-            )}
+          <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400 space-y-2 h-fit">
+            <p className="font-semibold text-slate-200">Model vs. market</p>
+            <p className="text-xs leading-relaxed">
+              Super Bowl prices are the only NFL futures feed The Odds API carries. Each book's
+              board is stripped of vig before comparison. Raw Super Bowl boards hold well over
+              30%, which would make every team look like value.
+            </p>
+            <p className="text-xs leading-relaxed">
+              Division titles and win totals have no feed at all, so those tabs are pure model
+              output from the same simulation.
+            </p>
+            <p className="text-[11px] text-slate-500">Click "Log pick" on any row to add it to your bet slip.</p>
           </div>
         </div>
       )}

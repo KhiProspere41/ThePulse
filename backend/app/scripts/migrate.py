@@ -3,8 +3,9 @@
 The MVP has never used Alembic — `init_db()` just runs `create_all`, which
 creates missing *tables* but never alters an existing one. Adding player props
 and futures changed the `picks` table (new `bet_type` / `player` columns, and
-`game_id` had to become nullable so a futures pick can exist without a game),
-so an already-populated database needs this one-off pass.
+`game_id` had to become nullable so a futures pick can exist without a game);
+bet slips added a `slip_id` column. An already-populated database needs this
+one-off pass to pick up changes like those.
 
     python -m app.scripts.migrate
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 NEW_PICK_COLUMNS = {
     "bet_type": "VARCHAR DEFAULT 'game'",
     "player": "VARCHAR",
+    "slip_id": "INTEGER",
 }
 
 # Column order of the rebuilt `picks` table, used to copy rows across.
@@ -43,6 +45,7 @@ PICK_COLUMNS = [
     "clv",
     "result",
     "notes",
+    "slip_id",
 ]
 
 
